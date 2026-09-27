@@ -1,10 +1,10 @@
 package com.qa.framework.base;
 
-import org.openqa.selenium.By;
-
 /**
  * Single place for every page-level constant: waits, browser/window settings, JavaScript snippets,
  * DOM attribute names, locators and expected UI text.
+ *
+ * <p>Locators are String constants used by PageFactory {@code @FindBy} annotations in the page classes.
  *
  * <p>Page classes use these via {@code import static com.qa.framework.base.ConstantPages.*;}.
  * When the UI changes, update the locator here only.
@@ -86,51 +86,53 @@ public final class ConstantPages {
     // =====================================================================================
     // XPath Practice Page - locators
     // =====================================================================================
+    // Every locator is a String compile-time constant so it can be used in PageFactory annotations,
+    // e.g. @FindBy(css = EMAIL_INPUT_CSS). Locators that must be built at runtime are String
+    // templates (…_XPATH with %s / %d) turned into a By inside the page class.
 
     // Dummy form
     // NOTE: the page renames this input's id to "shub" + random(1..100) on every load
     // (practice scenario for dynamic ids), so never locate it by id - name is stable.
-    public static final By EMAIL_INPUT = By.cssSelector("input[name='email']");
-    public static final By PASSWORD_INPUT = By.id("pass");
-    public static final By COMPANY_INPUT = By.cssSelector("input[name='company']");   // first match = visible one
-    public static final By MOBILE_INPUT = By.cssSelector("input[name='mobile number']");
-    public static final By SUBMIT_BUTTON = By.xpath("//button[@value='Submit']");
-    public static final By FIRST_CRUSH_INPUT = By.id("inp_val");
+    public static final String EMAIL_INPUT_CSS = "input[name='email']";
+    public static final String PASSWORD_INPUT_ID = "pass";
+    public static final String COMPANY_INPUT_CSS = "input[name='company']";          // first match = visible one
+    public static final String MOBILE_INPUT_CSS = "input[name='mobile number']";
+    public static final String SUBMIT_BUTTON_XPATH = "//button[@value='Submit']";
+    public static final String FIRST_CRUSH_INPUT_ID = "inp_val";
 
-    // User table (XPath axes) - %s = username, %d = column offset
-    public static final By USER_TABLE_ROWS = By.xpath("//table[@id='resultTable']//tr[td]");
+    // User table (XPath axes). Row list is a @FindBy; the per-user locators are templates
+    // (%s = username, %d = column offset) formatted at runtime into a By by the page class.
+    public static final String USER_TABLE_ROWS_XPATH = "//table[@id='resultTable']//tr[td]";
     public static final String USER_CHECKBOX_XPATH =
             "//table[@id='resultTable']//a[normalize-space()='%s']/parent::td/preceding-sibling::td/input[@type='checkbox']";
     public static final String USER_CELL_XPATH =
             "//table[@id='resultTable']//a[normalize-space()='%s']/parent::td/following-sibling::td[%d]";
 
     // Dropdown
-    public static final By CARS_DROPDOWN = By.id("cars");
+    public static final String CARS_DROPDOWN_ID = "cars";
 
     // Alerts & modal
-    public static final By WINDOW_ALERT_BUTTON = By.xpath("//button[normalize-space()='Click To Open Window Alert']");
-    public static final By PROMPT_ALERT_BUTTON = By.xpath("//button[normalize-space()='Click To Open Window Prompt Alert']");
-    public static final By OPEN_MODAL_BUTTON = By.id("myBtn");
-    public static final By MODAL = By.id("myModal");
-    public static final By MODAL_BODY = By.cssSelector("#myModal .modal-body");
-    public static final By MODAL_CLOSE = By.cssSelector("#myModal .close");
+    public static final String WINDOW_ALERT_BUTTON_XPATH = "//button[normalize-space()='Click To Open Window Alert']";
+    public static final String PROMPT_ALERT_BUTTON_XPATH = "//button[normalize-space()='Click To Open Window Prompt Alert']";
+    public static final String OPEN_MODAL_BUTTON_ID = "myBtn";
+    public static final String MODAL_ID = "myModal";
+    public static final String MODAL_BODY_CSS = "#myModal .modal-body";
+    public static final String MODAL_CLOSE_CSS = "#myModal .close";
 
-    // Shadow DOM (inside a shadow root Selenium supports CSS selectors only)
-    public static final By SHADOW_HOST = By.id("userName");
+    // Shadow DOM: the host is a normal element (@FindBy works); elements INSIDE shadow roots cannot
+    // be reached by @FindBy - they are CSS selectors resolved through getShadowRoot().
+    public static final String SHADOW_HOST_ID = "userName";
     public static final String SHADOW_USERNAME_CSS = "#kils";
     public static final String SHADOW_NESTED_HOST_CSS = "#app2";
     public static final String SHADOW_PIZZA_CSS = "#pizza";
 
     // DataTable (tablepress)
-    public static final By DATATABLE_SEARCH = By.id("dt-search-0");
-    public static final By DATATABLE_ROWS = By.cssSelector("#tablepress-1 tbody tr");
-    public static final By DATATABLE_INFO = By.id("tablepress-1_info");
-    public static final By DATATABLE_PAGE_LENGTH = By.id("dt-length-0");
+    public static final String DATATABLE_SEARCH_ID = "dt-search-0";
+    public static final String DATATABLE_ROWS_CSS = "#tablepress-1 tbody tr";
+    public static final String DATATABLE_INFO_ID = "tablepress-1_info";
+    public static final String DATATABLE_PAGE_LENGTH_ID = "dt-length-0";
 
-    // Payment form
-    public static final By CARD_NAME_INPUT = By.id(ID_CARD_NAME);
-    public static final By CARD_NUMBER_INPUT = By.id(ID_CARD_NUMBER);
-    public static final By EXPIRY_INPUT = By.id(ID_EXPIRY);
-    public static final By CVV_INPUT = By.id(ID_CVV);
-    public static final By CARD_NUMBER_ERROR = By.id("cardNumberError");
+    // Payment form (ID_CARD_NAME, ID_CARD_NUMBER, ID_EXPIRY, ID_CVV are defined above)
+    public static final String CARD_NUMBER_ERROR_ID = "cardNumberError";
+
 }

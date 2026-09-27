@@ -1,6 +1,6 @@
 # Generic Selenium Framework
 
-A reusable UI test automation base that can be copied into any web project.
+A reusable UI test automation base that can be copied into any web project. It uses the **Page Object Model with Selenium PageFactory**.
 
 **Java 21 · Selenium 4.49 · TestNG 7.11 · Maven · Allure 2.29 · Jenkins · AWS Systems Manager Parameter Store**
 
@@ -15,18 +15,19 @@ The sample tests target <https://selectorshub.com/xpath-practice-page/>. They co
 3. [Project layout](#3-project-layout)
 4. [Running the tests](#4-running-the-tests)
 5. [Configuration and environments](#5-configuration-and-environments)
-6. [Constants: `ConstantPages` and `ConstantTest`](#6-constants-constantpages-and-constanttest)
-7. [Parallel, headless, cross-browser and Grid](#7-parallel-headless-cross-browser-and-grid)
-8. [Retries](#8-retries)
-9. [Failure evidence](#9-failure-evidence)
-10. [Allure report](#10-allure-report)
-11. [Secrets in AWS Parameter Store (prod)](#11-secrets-in-aws-parameter-store-prod)
-12. [Jenkins pipeline](#12-jenkins-pipeline)
-13. [Sample test cases](#13-sample-test-cases)
-14. [Adding tests and reusing the framework in a new project](#14-adding-tests-and-reusing-the-framework-in-a-new-project)
-15. [Built-in fixes for unreliable pages](#15-built-in-fixes-for-unreliable-pages)
-16. [Troubleshooting](#16-troubleshooting)
-17. [Change log](#17-change-log)
+6. [Page objects with PageFactory](#6-page-objects-with-pagefactory)
+7. [Constants: `ConstantPages` and `ConstantTest`](#7-constants-constantpages-and-constanttest)
+8. [Parallel, headless, cross-browser and Grid](#8-parallel-headless-cross-browser-and-grid)
+9. [Retries](#9-retries)
+10. [Failure evidence](#10-failure-evidence)
+11. [Allure report](#11-allure-report)
+12. [Secrets in AWS Parameter Store (prod)](#12-secrets-in-aws-parameter-store-prod)
+13. [Jenkins pipeline](#13-jenkins-pipeline)
+14. [Sample test cases](#14-sample-test-cases)
+15. [Adding tests and reusing the framework in a new project](#15-adding-tests-and-reusing-the-framework-in-a-new-project)
+16. [Built-in fixes for unreliable pages](#16-built-in-fixes-for-unreliable-pages)
+17. [Troubleshooting](#17-troubleshooting)
+18. [Change log](#18-change-log)
 
 ---
 
@@ -42,6 +43,7 @@ The sample tests target <https://selectorshub.com/xpath-practice-page/>. They co
 | Retries | A failing test runs up to **3 times** (the first run plus 2 retries) before it is marked failed. |
 | Failure evidence | Each test that fails every attempt gets its own folder with a screenshot, page HTML, JSON details, stack trace and browser console log. The folder is wiped at the start of every run. |
 | Reporting | Allure with steps, severity, epic and feature labels, environment info and failure attachments. |
+| Page objects | **PageFactory**: `@FindBy` fields with lazy lookup, and `AjaxElementLocatorFactory` so every field waits for its element. `BasePage` helpers take the `@FindBy` fields; a few also take a `By` for locators built at run time. |
 | Constants | All locators, UI text, test data, groups and setting names live in `ConstantPages` / `ConstantTest`. |
 | CI | A parameterized `Jenkinsfile` that works on Linux and Windows agents, with Allure, JUnit and archived artifacts. |
 
@@ -73,7 +75,7 @@ generic-selenium-framework/
 ├── src/main/java/com/qa/framework/      REUSABLE CORE: copy this unchanged to other projects
 │   ├── base/
 │   │   ├── BaseTest.java                opens a browser before each test and closes it after
-│   │   ├── BasePage.java                waits, click/type with JS fallback, select, alerts, shadow DOM
+│   │   ├── BasePage.java                PageFactory setup; helpers for @FindBy fields: waits, click/type with JS fallback, select, alerts, shadow DOM
 │   │   ├── ConstantPages.java           ALL page constants: locators, UI text, JS, waits, browser args
 │   │   └── ConstantTest.java            ALL test constants: groups, data providers, setting names, defaults, test data
 │   ├── config/ConfigManager.java        environment settings, -D and env-var overrides, ssm: secrets
@@ -94,7 +96,7 @@ generic-selenium-framework/
 │   └── META-INF/services/org.testng.ITestNGListener   registers all listeners (no XML needed)
 │
 ├── src/test/java/com/qa/                PROJECT-SPECIFIC: replace for your application
-│   ├── pages/XPathPracticePage.java     page object for the sample site
+│   ├── pages/XPathPracticePage.java     PageFactory page object (@FindBy fields) for the sample site
 │   └── tests/                           DummyFormTest, UserTableTest, AlertsAndModalTest,
 │                                        ShadowDomTest, DataTableTest, PaymentFormTest
 └── src/test/resources/
@@ -138,7 +140,7 @@ run-tests.bat dev smoke.xml chrome false                              :: env sui
 
 ### 4.3 Jenkins
 
-Open the job, click **Build with Parameters**, choose the settings and click **Build**. See section 12.
+Open the job, click **Build with Parameters**, choose the settings and click **Build**. See section 13.
 
 ### 4.4 Where results go
 
@@ -180,13 +182,53 @@ Any key can then be overridden. Highest priority first:
 | `failure.evidence.clean` | `true` | Wipe the evidence folder at the start of each run |
 | `aws.region` | `ap-south-1` | Region for `ssm:` lookups |
 
-## 6. Constants: `ConstantPages` and `ConstantTest`
+## 6. Page objects with PageFactory
+
+Each page class `extends BasePage` and declares its elements as `@FindBy` fields. The locator strings come from `ConstantPages`:
+
+```java
+public class XPathPracticePage extends BasePage {
+
+    @FindBy(css = EMAIL_INPUT_CSS)            // "input[name='email']" in ConstantPages
+    private WebElement emailInput;
+
+    @FindBy(xpath = USER_TABLE_ROWS_XPATH)
+    private List<WebElement> userTableRows;
+
+    @Step("Fill dummy form with email '{0}'")
+    public XPathPracticePage fillDummyForm(String email, String pwd, String company, String mobile) {
+        type(emailInput, email);               // BasePage helper: wait + instant scroll + focus + type
+        ...
+    }
+}
+```
+
+- **Setup:** the `BasePage` constructor calls `PageFactory.initElements(new AjaxElementLocatorFactory(driver, timeout), this)`, so page classes don't call it themselves.
+- **Lazy lookup:** each field is a *proxy* that looks the element up again every time it's used. Pages that redraw themselves, like the DataTable, therefore don't cause `StaleElementReferenceException`. **Don't add `@CacheLookup`** to elements on changing pages.
+- **Built-in waiting:** `AjaxElementLocatorFactory` waits up to `timeout.explicit` seconds for a field's element to appear. The `BasePage` helpers also wait for it to be visible or clickable.
+- **Helpers** (take the `@FindBy` `WebElement` fields): `visible`, `clickable`, `allVisible`, `isDisplayed`, `waitForInvisibility`, `click`, `type`, `text`, `value`, `selectByVisibleText`, `selectByValue`, `selectedOption`, `waitForTextChange`, `shadowElement`. Only `visible`, `clickable`, `click` and `text` also have a `By` version, for locators built at run time.
+- **What can't be a `@FindBy`:**
+  - locators built at run time from templates, e.g. `USER_CHECKBOX_XPATH` with the username filled in. The page class turns them into a `By` (`By.xpath(String.format(USER_CHECKBOX_XPATH, name))`) and uses the `By` helpers.
+  - elements inside shadow roots. The host is a `@FindBy` field, and the inner elements are reached with `shadowElement(host, "#css", …)`.
+
+**Rules for PageFactory pages:**
+
+| Do | Don't |
+|---|---|
+| Declare fields as `private WebElement x;` with **no initialiser** | `private WebElement x = null;`: an initialiser runs after `BasePage` and wipes out the proxy |
+| Put locator strings in `ConstantPages` and use them in the annotation: `@FindBy(id = LOGIN_BUTTON_ID)` | Write locator strings straight into page classes |
+| Use `List<WebElement>` for groups of elements (rows, options) | `@CacheLookup` on anything that can change, which leads to stale elements |
+| Combine locators with `@FindBys` (AND, nested) or `@FindAll` (OR) when needed | Use `@FindBy` for elements inside a shadow root: it can't reach them |
+| Create page objects inside tests (after `BaseTest` has started the browser) | Create a page object in a field initialiser or a `static` block, before the browser exists |
+| Keep `By` for locators built at run time: `By.xpath(String.format(TEMPLATE, name))` | Try to put `String.format` inside an annotation, which isn't allowed |
+
+## 7. Constants: `ConstantPages` and `ConstantTest`
 
 Every hard-coded value lives in one of two classes in `com.qa.framework.base`. Page and test classes only refer to constants.
 
 | `ConstantPages` (the UI) | `ConstantTest` (the tests) |
 |---|---|
-| Locators (`EMAIL_INPUT`, `CARS_DROPDOWN`, …) and XPath templates | TestNG groups (`SMOKE`, `REGRESSION`) and data-provider names |
+| Locators as **strings for `@FindBy`** (`EMAIL_INPUT_CSS`, `CARS_DROPDOWN_ID`, …), XPath templates for locators built at run time, and CSS selectors for shadow-DOM fields | TestNG groups (`SMOKE`, `REGRESSION`) and data-provider names |
 | Expected UI text (alert text, modal text, page title) | Setting names (`KEY_APP_URL`, `KEY_RETRY_COUNT`, …) and defaults |
 | JavaScript snippets (scroll, click, focus, disable smooth scroll) | Test data (form rows, users, card numbers, search terms) |
 | Default waits, window size, browser arguments | Failure-evidence file names and Allure attachment names |
@@ -204,9 +246,9 @@ public void selectCarFromDropdown() {
 }
 ```
 
-All the constants are compile-time constants, so they work inside annotations (`groups`, `dataProvider`, `@Parameters`).
+All the constants are compile-time constants, so they work inside annotations: `@FindBy(css = …)`, `groups`, `dataProvider`, `@Parameters`. Each locator is written once, as a string.
 
-## 7. Parallel, headless, cross-browser and Grid
+## 8. Parallel, headless, cross-browser and Grid
 
 - **Parallel:** each suite XML sets defaults, e.g. `testng.xml` uses `parallel="methods" thread-count="3"`. `-Dparallel=methods|classes|tests|none` and `-Dthreads=N` override them at run time; that's how Jenkins sets them. `-Dparallel=default` keeps the XML value.
 - **Data providers:** `fillFormDataDriven` runs its rows in parallel (`parallel = true`).
@@ -219,7 +261,7 @@ All the constants are compile-time constants, so they work inside annotations (`
   ```
   The Grid console is at <http://localhost:4444/ui>.
 
-## 8. Retries
+## 9. Retries
 
 - By default a failing test runs **up to 3 times**: the first run plus `retry.count=2` retries.
 - It is marked **FAILED only if all 3 attempts fail**. If a retry passes, the test is green, and the earlier attempts show as "retried" in TestNG and Allure.
@@ -228,7 +270,7 @@ All the constants are compile-time constants, so they work inside annotations (`
 - Skipped tests are not retried.
 - To change it, use `-Dretry.count=0` (no retries), `retry.count` in `common.properties`, `DEFAULT_RETRY_COUNT` in `ConstantTest`, or the Jenkins `RETRY_COUNT` parameter.
 
-## 9. Failure evidence
+## 10. Failure evidence
 
 - **When it's written:** only for tests that failed **every** attempt. A test that passes on a retry leaves no folder.
 - **Fresh folder per run:** `failure-evidence/` is **deleted and recreated once at the start of every run**, whether you start it from Maven, IntelliJ or Jenkins.
@@ -252,7 +294,7 @@ failure-evidence/
 - **Jenkins:** archives `failure-evidence/**` with every build.
 - **IntelliJ:** press **Ctrl+Alt+Y** (Reload from Disk) if the folder doesn't appear.
 
-## 10. Allure report
+## 11. Allure report
 
 Each run writes raw results to `target/allure-results/`. The report is built from them.
 
@@ -270,7 +312,7 @@ What you'll find in the report:
 
 `mvn clean` deletes `target/`, including the results. IntelliJ doesn't clean between runs, so results from several runs pile up until you run `mvn clean` or delete `target/allure-results`.
 
-## 11. Secrets in AWS Parameter Store (prod)
+## 12. Secrets in AWS Parameter Store (prod)
 
 `prod.properties` holds references, not values:
 
@@ -292,7 +334,7 @@ One-time setup:
    - an **IAM user** whose access key is saved in Jenkins as *AWS Credentials* with the ID `aws-selenium-prod`.
 3. To run prod locally, set up credentials first (`aws configure`, or `set AWS_PROFILE=…`), then run `mvn clean test -Denv=prod`.
 
-## 12. Jenkins pipeline
+## 13. Jenkins pipeline
 
 **One-time setup:**
 
@@ -321,7 +363,7 @@ After a build you get:
 
 The pipeline runs on Linux (`sh`) and Windows (`bat`) agents.
 
-## 13. Sample test cases
+## 14. Sample test cases
 
 The suite has 19 test methods, which make 23 runs once data-provider rows are counted. The 5 marked ✔ in the Smoke column are the smoke set.
 
@@ -349,16 +391,16 @@ The suite has 19 test methods, which make 23 runs once data-provider rows are co
 
 The payment form is never submitted. The tests use a well-known dummy test card number.
 
-## 14. Adding tests and reusing the framework in a new project
+## 15. Adding tests and reusing the framework in a new project
 
 1. Copy the project, or publish the core with `mvn install` and add it as a dependency.
-2. Add locators and UI text to **`ConstantPages`**, and test data, groups and data-provider names to **`ConstantTest`**.
-3. Create a page class under `src/test/java/.../pages` that `extends BasePage`. Use its helpers (`visible`, `click`, `type`, `selectByVisibleText`, `waitForAlert`, `shadowElement`, …) and label methods with `@Step`.
+2. Add each locator to **`ConstantPages`** as a string (`LOGIN_BUTTON_ID = "login"`), or as a template (`ROW_XPATH = "//tr[td='%s']"`) if it has to be built at run time. Add UI text there too. Add test data, groups and data-provider names to **`ConstantTest`**.
+3. Create a page class under `src/test/java/.../pages` that `extends BasePage`. Declare its elements as `@FindBy(id = LOGIN_BUTTON_ID) private WebElement loginButton;`, with no initialiser, because `BasePage` fills the fields in. Use the helpers (`visible`, `click`, `type`, `selectByVisibleText`, `waitForAlert`, `shadowElement`, …) and label methods with `@Step`.
 4. Create a test class under `src/test/java/.../tests` that `extends BaseTest`, then add `@Test(groups = …)`, `@Epic` / `@Feature` / `@Severity`.
 5. Point `app.url` (and the credentials) in `config/*.properties` at your application, and update the SSM paths in `prod.properties`.
 6. Add the new package or classes to the suite XMLs if you use a different package name.
 
-## 15. Built-in fixes for unreliable pages
+## 16. Built-in fixes for unreliable pages
 
 These fixes came from problems found on the sample site. They apply to every page:
 
@@ -366,9 +408,9 @@ These fixes came from problems found on the sample site. They apply to every pag
 - **Smooth scrolling:** sites with CSS `scroll-behavior: smooth` make Selenium click while the page is still scrolling, which causes `ElementClickInterceptedException`. `BasePage` turns smooth scrolling off after every `open()` and before every scroll, and always scrolls instantly to the centre of the screen.
 - **Blocked clicks:** `click()` falls back to a JavaScript click, and `type()` falls back to focusing the field with JavaScript, if something is covering the element.
 - **Content added by scripts:** the data table and shadow-DOM fields are created by page scripts that can finish after `driver.get()` returns. The page class waits for the table's info text, and `shadowElement()` waits for the shadow root to exist.
-- **Explicit waits only:** the implicit wait is 0, and every lookup goes through `WebDriverWait`.
+- **Explicit waits only:** the implicit wait is 0. `@FindBy` fields wait through `AjaxElementLocatorFactory`, and visibility/clickability checks (plus the few `By` lookups built at run time) go through `WebDriverWait`.
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
@@ -381,8 +423,13 @@ These fixes came from problems found on the sample site. They apply to every pag
 | No Allure results | `mvn clean` deletes `target/allure-results`. Generate the report before cleaning. |
 | `Could not read SSM parameter …` on prod | Check your AWS credentials, the region, and the `ssm:GetParameter` + `kms:Decrypt` permissions. |
 | `Missing required config 'app.url' …` | The key isn't set for that env. Add it to `config/<env>.properties` or pass it with `-D`. |
+| `NullPointerException` on a `@FindBy` field | The field has an initialiser (`= null`), or the page wasn't created through `BasePage`. Remove the initialiser, and make sure the page `extends BasePage`. |
+| `NoSuchElementException` from a `@FindBy` field after about 15 s | The field waited `timeout.explicit` seconds and never found the element. Check the locator string in `ConstantPages` against the live page. The error message shows which locator it used. |
+| `StaleElementReferenceException` on a `@FindBy` field | Usually caused by `@CacheLookup`. Remove it so the element is looked up fresh each time. |
+| `IllegalStateException: No WebDriver for thread …` | A page object was created outside a test, or in a class that doesn't `extend BaseTest`. |
+| `Attribute value must be constant` (compile error) | `@FindBy` only accepts compile-time constants. Use a `static final String` from `ConstantPages`, not a `By` or a value built with `String.format`. |
 
-## 17. Change log
+## 18. Change log
 
 | Change | Details |
 |---|---|
@@ -394,3 +441,5 @@ These fixes came from problems found on the sample site. They apply to every pag
 | Failure evidence | One folder per failed test (PNG, HTML, JSON, stack trace, console log), wiped at the start of every run, archived in Jenkins |
 | Page reliability | Smooth scrolling turned off, instant scroll, JavaScript focus/click fallbacks, waits for the data table and shadow DOM |
 | Retries | 1 run + 2 retries (`retry.count=2`, Jenkins `RETRY_COUNT`). Evidence is written only when all 3 attempts fail, and `failure-info.json` records each attempt's error. |
+| PageFactory | `BasePage` sets up `@FindBy` fields with `AjaxElementLocatorFactory` and has a `WebElement` version of every helper. `XPathPracticePage` was converted to `@FindBy` fields, and `ConstantPages` locators are now strings for the annotations. The test classes didn't change. |
+| Cleanup | Removed the leftover `By`-based page-object code: the 24 unused `By` constants in `ConstantPages`, and the 9 unused `By` helpers in `BasePage` (kept `visible`, `clickable`, `click` and `text`, which the locators built at run time need). |
