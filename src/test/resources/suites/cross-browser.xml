@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Runs the smoke group on Chrome, Firefox and Edge at the same time (one <test> per browser). -->
+<suite name="Cross Browser Smoke" parallel="tests" thread-count="3" verbose="1">
+    <test name="Chrome">
+        <parameter name="browser" value="chrome"/>
+        <groups><run><include name="smoke"/></run></groups>
+        <packages><package name="com.qa.tests"/></packages>
+    </test>
+    <test name="Firefox">
+        <parameter name="browser" value="firefox"/>
+        <groups><run><include name="smoke"/></run></groups>
+        <packages><package name="com.qa.tests"/></packages>
+    </test>
+    <test name="Edge">
+        <parameter name="browser" value="edge"/>
+        <groups><run><include name="smoke"/></run></groups>
+        <packages><package name="com.qa.tests"/></packages>
+    </test>
+</suite>

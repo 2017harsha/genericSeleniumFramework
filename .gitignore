@@ -1,0 +1,16 @@
+target/
+allure-results/
+allure-report/
+failure-evidence/
+.allure/
+*.log
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.DS_Store
+# never commit real credentials
+*.env
+aws-credentials*
